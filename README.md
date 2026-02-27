@@ -8,10 +8,10 @@ Install any skill from this repository using the `skills` CLI. This command will
 
 ```bash
 # List all available skills in this repository
-npx skills add clickup-skills --list
+npx skills add BrightProgrammer7/clickup-skills --list
 
-# Install the ClickUp skill
-npx skills add clickup-skills --skill clickup --global
+# Install the ClickUp skill globally
+npx skills add BrightProgrammer7/clickup-skills --skill clickup --global
 ```
 
 ## Available Skills
@@ -31,7 +31,7 @@ Interact with ClickUp workspaces using direct REST API calls (`curl`). No MCP se
 - Pagination and rate limit handling
 
 ```bash
-npx skills add clickup-skills --skill clickup --global
+npx skills add BrightProgrammer7/clickup-skills --skill clickup --global
 ```
 
 ### Prerequisites
