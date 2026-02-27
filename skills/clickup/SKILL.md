@@ -24,12 +24,24 @@ export CLICKUP_TOKEN="pk_YOUR_TOKEN_HERE"
 
 Store in `.env` or export before running commands.
 
-### 3. Verify Connection
+### 3. Persist Token (Recommended)
+
+Add to `~/.zshrc` or `~/.zprofile` so it survives shell restarts:
 
 ```bash
-curl -s -H "Authorization: $CLICKUP_TOKEN" \
+export CLICKUP_TOKEN="pk_YOUR_TOKEN_HERE"
+```
+
+> **Note:** Tokens set only in the terminal session won't be inherited by Claude Code's Bash subshells. Persisting in your shell profile ensures it's always available.
+
+### 4. Verify Connection
+
+```bash
+curl -s --header "Authorization: $CLICKUP_TOKEN" \
   https://api.clickup.com/api/v2/user | python3 -m json.tool
 ```
+
+> **zsh tip:** Always use `--header` instead of `-H` in Claude Code's Bash tool — `-H` can be misinterpreted as a shell flag in zsh subshells.
 
 ## ClickUp Hierarchy
 
@@ -76,7 +88,7 @@ Workspace (Team) → Space → Folder (optional) → List → Task → Subtask
 
 ```bash
 # Step 1: Get workspace (team) ID
-curl -s -H "Authorization: $CLICKUP_TOKEN" \
+curl -s --header "Authorization: $CLICKUP_TOKEN" \
   https://api.clickup.com/api/v2/team | python3 -c "
 import sys, json
 teams = json.load(sys.stdin)['teams']
@@ -84,7 +96,7 @@ for t in teams:
     print(f\"{t['id']}: {t['name']}\")"
 
 # Step 2: Get spaces in workspace
-curl -s -H "Authorization: $CLICKUP_TOKEN" \
+curl -s --header "Authorization: $CLICKUP_TOKEN" \
   "https://api.clickup.com/api/v2/team/{TEAM_ID}/space" | python3 -c "
 import sys, json
 spaces = json.load(sys.stdin)['spaces']
@@ -92,7 +104,7 @@ for s in spaces:
     print(f\"{s['id']}: {s['name']}\")"
 
 # Step 3: Get lists (folderless)
-curl -s -H "Authorization: $CLICKUP_TOKEN" \
+curl -s --header "Authorization: $CLICKUP_TOKEN" \
   "https://api.clickup.com/api/v2/space/{SPACE_ID}/list" | python3 -c "
 import sys, json
 lists = json.load(sys.stdin)['lists']
@@ -100,17 +112,39 @@ for l in lists:
     print(f\"{l['id']}: {l['name']}\")"
 ```
 
+### Search for a Task by Name
+
+```bash
+curl -s --header "Authorization: $CLICKUP_TOKEN" \
+  "https://api.clickup.com/api/v2/team/{TEAM_ID}/task?search=Task+Name&subtasks=true&include_closed=true" | python3 -c "
+import sys, json
+for t in json.load(sys.stdin).get('tasks', []):
+    print(f\"{t['id']}: [{t['status']['status']}] {t['name']}\")"
+```
+
+### Get Available Statuses for a List
+
+```bash
+curl -s --header "Authorization: $CLICKUP_TOKEN" \
+  "https://api.clickup.com/api/v2/list/{LIST_ID}" | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+for s in d.get('statuses', []):
+    print(f\"{s['status']} (type: {s['type']})\")
+"
+```
+
 ### Create a Task
 
 ```bash
 curl -s -X POST \
-  -H "Authorization: $CLICKUP_TOKEN" \
-  -H "Content-Type: application/json" \
+  --header "Authorization: $CLICKUP_TOKEN" \
+  --header "Content-Type: application/json" \
   "https://api.clickup.com/api/v2/list/{LIST_ID}/task" \
-  -d '{
+  --data '{
     "name": "My New Task",
     "description": "Task description here",
-    "status": "Open",
+    "status": "to do",
     "priority": 3,
     "assignees": [],
     "tags": [],
@@ -121,6 +155,36 @@ curl -s -X POST \
 
 **Priority values:** 1 = Urgent, 2 = High, 3 = Normal, 4 = Low
 
+### Bulk Create Tasks (Python — Recommended for batches)
+
+Use Python subprocess for bulk operations to avoid zsh flag interpretation issues:
+
+```python
+import subprocess, json
+
+TOKEN = "pk_YOUR_TOKEN"
+LIST_ID = "YOUR_LIST_ID"
+
+tasks = [
+    ("Task name", "to do"),
+    ("Another task", "in progress"),
+    ("Finished task", "done"),
+]
+
+for name, status in tasks:
+    payload = json.dumps({"name": name, "status": status})
+    result = subprocess.run(
+        ["curl", "-s", "-X", "POST",
+         "--header", f"Authorization: {TOKEN}",
+         "--header", "Content-Type: application/json",
+         f"https://api.clickup.com/api/v2/list/{LIST_ID}/task",
+         "--data", payload],
+        capture_output=True, text=True
+    )
+    d = json.loads(result.stdout)
+    print(f"[{d['status']['status']}] {d['name']}" if "id" in d else f"ERROR: {d.get('err')}")
+```
+
 ### Create a Subtask
 
 Same as creating a task, but add `"parent": "{parent_task_id}"` to the JSON body.
@@ -129,10 +193,10 @@ Same as creating a task, but add `"parent": "{parent_task_id}"` to the JSON body
 
 ```bash
 curl -s -X PUT \
-  -H "Authorization: $CLICKUP_TOKEN" \
-  -H "Content-Type: application/json" \
+  --header "Authorization: $CLICKUP_TOKEN" \
+  --header "Content-Type: application/json" \
   "https://api.clickup.com/api/v2/task/{TASK_ID}" \
-  -d '{
+  --data '{
     "name": "Updated Name",
     "status": "in progress",
     "priority": 2
@@ -144,7 +208,7 @@ curl -s -X PUT \
 ```bash
 PAGE=0
 while true; do
-  RESULT=$(curl -s -H "Authorization: $CLICKUP_TOKEN" \
+  RESULT=$(curl -s --header "Authorization: $CLICKUP_TOKEN" \
     "https://api.clickup.com/api/v2/list/{LIST_ID}/task?page=$PAGE")
   COUNT=$(echo "$RESULT" | python3 -c "import sys,json; print(len(json.load(sys.stdin)['tasks']))")
   echo "$RESULT" | python3 -c "
@@ -160,10 +224,10 @@ done
 
 ```bash
 curl -s -X POST \
-  -H "Authorization: $CLICKUP_TOKEN" \
-  -H "Content-Type: application/json" \
+  --header "Authorization: $CLICKUP_TOKEN" \
+  --header "Content-Type: application/json" \
   "https://api.clickup.com/api/v2/task/{TASK_ID}/comment" \
-  -d '{
+  --data '{
     "comment_text": "This is a comment from the API",
     "notify_all": false
   }'
@@ -173,15 +237,15 @@ curl -s -X POST \
 
 ```bash
 # Get time entries (date range in milliseconds)
-curl -s -H "Authorization: $CLICKUP_TOKEN" \
+curl -s --header "Authorization: $CLICKUP_TOKEN" \
   "https://api.clickup.com/api/v2/team/{TEAM_ID}/time_entries?start_date=1700000000000&end_date=1710000000000"
 
 # Create a time entry (duration in milliseconds)
 curl -s -X POST \
-  -H "Authorization: $CLICKUP_TOKEN" \
-  -H "Content-Type: application/json" \
+  --header "Authorization: $CLICKUP_TOKEN" \
+  --header "Content-Type: application/json" \
   "https://api.clickup.com/api/v2/team/{TEAM_ID}/time_entries" \
-  -d '{
+  --data '{
     "tid": "{TASK_ID}",
     "description": "Working on feature",
     "start": 1700000000000,
@@ -212,6 +276,10 @@ curl -s -X POST \
 | Timestamps in seconds | ClickUp uses **milliseconds** (Unix epoch × 1000) |
 | Not paginating task lists | Max 100 per page — always implement pagination loop |
 | Polling instead of webhooks | Subscribe to webhook events for real-time updates |
+| Using `-H` flag in zsh subshells | Use `--header` instead — `-H` is misinterpreted by zsh in some contexts |
+| Token not available in Claude Code Bash | Persist token in `~/.zshrc` or `~/.zprofile`; session-only exports don't survive subshells |
+| Trying to clear notifications via API | ClickUp API v2 has no notification endpoint — clear them manually in the UI |
+| Searching tasks without `include_closed=true` | Closed/done tasks are excluded by default; add `include_closed=true` to find them |
 
 ## Webhook Events
 
