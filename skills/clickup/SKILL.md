@@ -1,6 +1,7 @@
 ---
 name: clickup
 description: Use when managing ClickUp tasks, lists, spaces, time tracking, comments, or any project management operation via the ClickUp REST API. Triggers on "clickup", "task", "project management", "time entry", "workspace"
+license: Apache-2.0
 ---
 
 # ClickUp API Skill (No MCP)
